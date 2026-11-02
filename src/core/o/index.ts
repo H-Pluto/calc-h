@@ -240,3 +240,5 @@ export function calcRoleDamage(
 
   return roleDamageRes
 }
+
+export * from '@/core/o/model/RoleDamageRes.js'
