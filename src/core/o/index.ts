@@ -3,7 +3,7 @@ import { roundTo } from '@/core/o/utils/calc.js'
 import { roles } from '@/core/o/role.js'
 import { enemies } from '@/core/o/enemy.js'
 import { weapons } from '@/core/o/weapon.js'
-import { RoleDamageRes } from '@/core/o/model/RoleDamageRes.js'
+import type { RoleDamageRes } from '@/core/o/model/RoleDamageRes.js'
 
 /**
  * 攻击力计算
@@ -241,4 +241,4 @@ export function calcRoleDamage(
   return roleDamageRes
 }
 
-export * from '@/core/o/model/RoleDamageRes.js'
+export type { RoleDamageRes } from '@/core/o/model/RoleDamageRes.js'
