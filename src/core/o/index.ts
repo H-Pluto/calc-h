@@ -4,6 +4,11 @@ import { roles } from '@/core/o/role.js'
 import { enemies } from '@/core/o/enemy.js'
 import { weapons } from '@/core/o/weapon.js'
 import type { RoleDamageRes } from '@/core/o/model/RoleDamageRes.js'
+import type {
+  CalcBaseDamageParams,
+  CalcRoleDamageParams,
+  CalcDamageParams,
+} from '@/core/o/model/DamageCalcParam.js'
 
 /**
  * 攻击力计算
@@ -44,10 +49,17 @@ export function featherCalc(attribute: number, multiplier: number): number {
  * @author huaju
  * @param roleLevel 角色等级
  * @param enemyLevel 敌人等级
+ * @param defenseReduction 减防系数(百分比小数)
  * @returns 防御值
  */
-export function defenseCalc(roleLevel: number, enemyLevel: number): number {
-  return roundTo((roleLevel + 100) / (roleLevel + 100 + enemyLevel + 100))
+export function defenseCalc(
+  roleLevel: number,
+  enemyLevel: number,
+  defenseReduction: number = 0,
+): number {
+  return roundTo(
+    (roleLevel + 100) / (roleLevel + 100 + (enemyLevel + 100) * (1 - defenseReduction)),
+  )
 }
 
 /**
@@ -73,34 +85,36 @@ export function resistanceCalc(resistance: Resistance, reduce: Resistance): Resi
  * @param roleLevel 角色等级
  * @param enemyLevel 敌人等级
  * @param enemyResistance 敌人抗性
- * @param reduce 减伤
+ * @param reduce 削抗
  * @param dmgPercentBonus 伤害加成
  * @param critDamage 暴击伤害
  * @param damageType 伤害类型
+ * @param defenseReduction 减防系数(百分比小数)
  * @returns 计算后的伤害值
  */
-export function calcDamage(
-  attack: number,
-  multiplier: number,
-  roleLevel: number,
-  enemyLevel: number,
-  enemyResistance: Resistance,
-  reduce: Resistance,
-  dmgPercentBonus: number,
-  critDamage: number,
-  damageType: number,
-): number {
-  console.debug(
-    `属性参数：${attack}, ${multiplier}, ${roleLevel}, ${enemyLevel}, ${enemyResistance}, ${reduce}, ${dmgPercentBonus}, ${critDamage}`,
-  )
-  const resultResistance = resistanceCalc(enemyResistance, reduce).getResistanceType(damageType)
+export function calcDamage({
+  attack,
+  multiplier,
+  roleLevel,
+  enemyLevel,
+  enemyResistance,
+  dmgPercentBonus,
+  critDamage,
+  damageType,
+  reduce = new Resistance(0),
+  defenseReduction = 0,
+}: CalcDamageParams): number {
+  const resultResistance = resistanceCalc(
+    enemyResistance,
+    reduce ?? new Resistance(0),
+  ).getResistanceType(damageType)
   if (resultResistance === undefined) throw new Error('传入的伤害类型有误')
   return roundTo(
     attack *
       multiplier *
       (1 + dmgPercentBonus) *
       (1 + critDamage) *
-      defenseCalc(roleLevel, enemyLevel) *
+      defenseCalc(roleLevel, enemyLevel, defenseReduction) *
       (1 - resultResistance),
   )
 }
@@ -114,53 +128,69 @@ export function calcDamage(
  * @param roleLevel 角色等级
  * @param enemyLevel 敌人等级
  * @param enemyResistance 敌人抗性
- * @param reduce 减伤
+ * @param reduce 削抗
  * @param dmgPercentBonus 伤害加成
  * @param critDamage 暴击伤害
  * @param damageType 伤害类型
+ * @param defenseReduction 减防系数(百分比小数)
  * @returns 计算后的伤害值
  */
-export function calcBaseDamage(
-  attack: number,
-  multiplier: number,
-  roleLevel: number,
-  enemyLevel: number,
-  enemyResistance: number,
-  reduce: number,
-  dmgPercentBonus: number,
-  critDamage: number,
-  damageType: number,
-): number {
-  return calcDamage(
-    attack,
-    multiplier,
-    roleLevel,
-    enemyLevel,
-    new Resistance(enemyResistance),
-    new Resistance(reduce),
-    dmgPercentBonus,
-    critDamage,
-    damageType,
-  )
+export function calcBaseDamage({
+  attack,
+  multiplier,
+  roleLevel,
+  enemyLevel,
+  enemyResistance,
+  dmgPercentBonus,
+  critDamage,
+  damageType,
+  reduce = 0,
+  defenseReduction = 0,
+}: CalcBaseDamageParams): number {
+  return calcDamage({
+    attack: attack,
+    multiplier: multiplier,
+    roleLevel: roleLevel,
+    enemyLevel: enemyLevel,
+    enemyResistance: new Resistance(enemyResistance),
+    dmgPercentBonus: dmgPercentBonus,
+    critDamage: critDamage,
+    damageType: damageType,
+    reduce: new Resistance(reduce ?? 0),
+    defenseReduction: defenseReduction,
+  })
 }
 
 /**
  * 角色伤害计算
  * @description 公式: 基础攻击力 * (1 + 百分比攻击力加成) * 倍率 * (1 + 增伤) * (1 + 暴击伤害) * 防御系数 * (1 - 抗性系数)
  * @author huaju
+ * @param roleName 角色名称
+ * @param weaponName 武器名称
+ * @param enemyName 敌人名称
+ * @param roleLevel 角色等级
+ * @param enemyLevel 敌人等级
+ * @param atkPercent 百分比攻击力加成（小数）
+ * @param reduce 削抗值（小数）
+ * @param dmgPercentBonus 伤害百分比加成（小数）
+ * @param critDamage 暴击伤害（小数）
+ * @param damageType 伤害类型
+ * @param defenseReduction 减防系数（百分比小数，0~1，默认 0）
+ * @returns 角色各类型伤害结果
  */
-export function calcRoleDamage(
-  roleName: string,
-  weaponName: string,
-  enemyName: string,
-  roleLevel: number,
-  enemyLevel: number,
-  atkPercent: number,
-  reduce: number,
-  dmgPercentBonus: number,
-  critDamage: number,
-  damageType: number,
-): RoleDamageRes {
+export function calcRoleDamage({
+  roleName,
+  weaponName,
+  enemyName,
+  roleLevel,
+  enemyLevel,
+  atkPercent,
+  dmgPercentBonus,
+  critDamage,
+  damageType,
+  reduce = 0,
+  defenseReduction = 0,
+}: CalcRoleDamageParams): RoleDamageRes {
   const role = roles.find((x) => x.name === roleName)
   const weapon = weapons.find((x) => x.name === weaponName)
   const enemy = enemies.find((x) => x.name === enemyName)
@@ -179,62 +209,66 @@ export function calcRoleDamage(
   }
   role.normalAtkDamageBreakdown.forEach((multiplier) => {
     roleDamageRes.normalDamage.push(
-      calcDamage(
-        baseAttack * (1 + atkPercent + weapon.atkPercent),
+      calcDamage({
+        attack: baseAttack * (1 + atkPercent + weapon.atkPercent),
         multiplier,
-        roleLevel,
-        enemyLevel,
-        enemy.resistances,
-        new Resistance(reduce),
-        dmgPercentBonus + weapon.dmgPercentBonus,
-        critDamage + weapon.critDamage + role.critDamage,
-        damageType,
-      ),
+        roleLevel: roleLevel,
+        enemyLevel: enemyLevel,
+        enemyResistance: enemy.resistances,
+        dmgPercentBonus: dmgPercentBonus + weapon.dmgPercentBonus,
+        critDamage: critDamage + weapon.critDamage + role.critDamage,
+        damageType: damageType,
+        reduce: new Resistance(reduce ?? 0),
+        defenseReduction: defenseReduction,
+      }),
     )
   })
   role.eAtkDamageBreakdown.forEach((multiplier) => {
     roleDamageRes.eDamage.push(
-      calcDamage(
-        baseAttack * (1 + atkPercent + weapon.atkPercent),
+      calcDamage({
+        attack: baseAttack * (1 + atkPercent + weapon.atkPercent),
         multiplier,
-        roleLevel,
-        enemyLevel,
-        enemy.resistances,
-        new Resistance(reduce),
-        dmgPercentBonus + weapon.dmgPercentBonus,
-        critDamage + weapon.critDamage + role.critDamage,
-        damageType,
-      ),
+        roleLevel: roleLevel,
+        enemyLevel: enemyLevel,
+        enemyResistance: enemy.resistances,
+        dmgPercentBonus: dmgPercentBonus + weapon.dmgPercentBonus,
+        critDamage: critDamage + weapon.critDamage + role.critDamage,
+        damageType: damageType,
+        reduce: new Resistance(reduce ?? 0),
+        defenseReduction: defenseReduction,
+      }),
     )
   })
   role.qAtkDamageBreakdown.forEach((multiplier) => {
     roleDamageRes.qDamahe.push(
-      calcDamage(
-        baseAttack * (1 + atkPercent + weapon.atkPercent),
+      calcDamage({
+        attack: baseAttack * (1 + atkPercent + weapon.atkPercent),
         multiplier,
-        roleLevel,
-        enemyLevel,
-        enemy.resistances,
-        new Resistance(reduce),
-        dmgPercentBonus + weapon.dmgPercentBonus,
-        critDamage + weapon.critDamage + role.critDamage,
-        damageType,
-      ),
+        roleLevel: roleLevel,
+        enemyLevel: enemyLevel,
+        enemyResistance: enemy.resistances,
+        dmgPercentBonus: dmgPercentBonus + weapon.dmgPercentBonus,
+        critDamage: critDamage + weapon.critDamage + role.critDamage,
+        damageType: damageType,
+        reduce: new Resistance(reduce ?? 0),
+        defenseReduction: defenseReduction,
+      }),
     )
   })
   role.passiveDamageBreakdown.forEach((multiplier) => {
     roleDamageRes.passiveDamage.push(
-      calcDamage(
-        baseAttack * (1 + atkPercent + weapon.atkPercent),
+      calcDamage({
+        attack: baseAttack * (1 + atkPercent + weapon.atkPercent),
         multiplier,
-        roleLevel,
-        enemyLevel,
-        enemy.resistances,
-        new Resistance(reduce),
-        dmgPercentBonus + weapon.dmgPercentBonus,
-        critDamage + weapon.critDamage + role.critDamage,
-        damageType,
-      ),
+        roleLevel: roleLevel,
+        enemyLevel: enemyLevel,
+        enemyResistance: enemy.resistances,
+        dmgPercentBonus: dmgPercentBonus + weapon.dmgPercentBonus,
+        critDamage: critDamage + weapon.critDamage + role.critDamage,
+        damageType: damageType,
+        reduce: new Resistance(reduce ?? 0),
+        defenseReduction: defenseReduction,
+      }),
     )
   })
 
