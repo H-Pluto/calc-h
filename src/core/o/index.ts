@@ -241,4 +241,4 @@ export function calcRoleDamage(
   return roleDamageRes
 }
 
-export type { RoleDamageRes } from '@/core/o/model/RoleDamageRes.js'
+export { Resistance } from '@/core/o/resistance.js'
